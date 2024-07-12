@@ -33,8 +33,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.kudos.radaar.core.domain.entities.RadarData
 import com.kudos.radaar.core.helper.BTHelperImpl
 import com.kudos.radaar.core.helper.BTState
+import com.kudos.radaar.core.helper.Routes
+import com.kudos.radaar.core.presentation.radar.RadarView
 import com.kudos.radaar.core.presentation.radar.RadarViewModel
 import com.kudos.radaar.ui.theme.RadaarTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,42 +55,75 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val radarViewModel: RadarViewModel by viewModels()
+
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
+            val navController: NavHostController = rememberNavController()
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+
+
             RadaarTheme {
                 val status = radarViewModel.status.collectAsState().value
                 val devices = radarViewModel.devices.toList()
 
+
+
                 Scaffold(modifier = Modifier.fillMaxSize(), floatingActionButton = {
-                    FloatingActionButton(onClick = { radarViewModel.getBTDevices() }) {
-                        Text(text = "Scan")
-                    }
+                    if (currentRoute == Routes.Home.route)
+                        Column {
+                            FloatingActionButton(onClick = { radarViewModel.getBTDevices() }) {
+                                Text(text = "Scan")
+                            }
+//                            if (status == BTState.CONNECTED)
+                            FloatingActionButton(onClick = {
+                                navController.navigate(
+                                    Routes.Radar.route
+                                )
+                            }) {
+                                Text(text = "Radar")
+                            }
+                        }
                 }) { innerPadding ->
-                    Column(Modifier.padding(innerPadding)) {
-                        Text(text = "Status: $status", modifier = Modifier.clickable {
-                            if(status == BTState.CONNECTED) radarViewModel.disconnectBT()
-                        })
-                        LazyColumn {
-                            if (devices == null || devices?.isEmpty() == true) {
-                                item {
-                                    Text(text = "Tidak ada perangkat bluetooth")
-                                }
-                            } else {
-                                items(devices!!) {
-                                    Text(text = "${it.address} - ${it.name}", modifier = Modifier
-                                        .clickable {
-                                            radarViewModel.connectBT(it)
+                    NavHost(navController = navController, startDestination = Routes.Home.route) {
+                        composable(route = Routes.Home.route) {
+                            Column(Modifier.padding(innerPadding)) {
+                                Text(text = "Status: $status", modifier = Modifier.clickable {
+                                    if (status == BTState.CONNECTED) radarViewModel.disconnectBT()
+                                })
+                                LazyColumn {
+                                    if (devices == null || devices?.isEmpty() == true) {
+                                        item {
+                                            Text(text = "Tidak ada perangkat bluetooth")
                                         }
-                                        .fillMaxWidth()
-                                        .padding(8.dp))
+                                    } else {
+                                        items(devices!!) {
+                                            Text(text = "${it.address} - ${it.name}",
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        radarViewModel.connectBT(it)
+                                                    }
+                                                    .fillMaxWidth()
+                                                    .padding(8.dp))
+                                        }
+                                    }
                                 }
                             }
                         }
+
+                        composable(route = Routes.Radar.route) {
+                            RadarView(
+                                radarDatas =
+                                radarViewModel.radarDataStateList
+                            )
+                        }
                     }
+
+
                 }
             }
         }

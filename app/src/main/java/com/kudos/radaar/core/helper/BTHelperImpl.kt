@@ -32,7 +32,12 @@ class BTHelperImpl : BTHelper {
     var mmDevice: BluetoothDevice? = null
 
     private val _connectionFlow = MutableSharedFlow<BTState>()
-    val connectionFlow: SharedFlow<BTState> = _connectionFlow.asSharedFlow()
+    override val connectionFlow: SharedFlow<BTState> = _connectionFlow.asSharedFlow()
+    private val _rawIncomingDatasFlow = MutableSharedFlow<List<String>>()
+    override val rawIncomingDatasFlow: SharedFlow<List<String>>
+        get() = _rawIncomingDatasFlow
+    private val listRawDatas: MutableList<String> = mutableListOf()
+
     private var connectThread: ConnectThread? = null
 
     override fun findBT(context: Context): List<BluetoothDevice> {
@@ -71,13 +76,13 @@ class BTHelperImpl : BTHelper {
         TODO("Not yet implemented")
     }
 
-    fun openBT(context: Context, device: BluetoothDevice) {
+    override fun openBT(context: Context, device: BluetoothDevice) {
        connectThread = ConnectThread(device).apply {
             start()
         }
     }
 
-    fun closeBTConnection(){
+    override fun closeBTConnection(){
         connectThread?.cancel()
     }
 
@@ -98,8 +103,15 @@ class BTHelperImpl : BTHelper {
             }
         }
 
-        override fun run() {
+        private fun emitIncomingRawData(data: String){
+            Log.d("RadarViewModel", ": $data")
+            synchronized(listRawDatas) {
+                listRawDatas.add(data)
+                _rawIncomingDatasFlow.tryEmit(listRawDatas) // Emit as a list, you can adjust this according to your needs
+            }
+        }
 
+        override fun run() {
 
             try {
                 updateBTState(BTState.CONNECTING)
@@ -128,6 +140,7 @@ class BTHelperImpl : BTHelper {
 
                     CoroutineScope(Dispatchers.IO).launch {
                         Log.d("CLASSIC", "Received: $readMessage")
+                        emitIncomingRawData(readMessage)
                     }
                     // Here, you can update your UI or handle the received data as needed.
                 }
